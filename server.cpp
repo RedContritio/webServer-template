@@ -4,71 +4,76 @@
 #include <cstdlib>
 #include <cerrno>
 
+#include <thread>
+
 #include "net.h"
 
 
-void sys_error(const char *msg)
-{
-    perror(msg);
-    exit(1);
+void process_client(sockaddr_in addr, int conn_fd) {
+    char buffer[BUFSIZ];
+    char client_ip[ADDRSTR_SIZE];
+
+    printf("client ip: %s, port: %d connected.\n",
+           inet_ntop(AF_INET, &addr.sin_addr.s_addr, client_ip, sizeof(client_ip)),
+           ntohs(addr.sin_port));
+
+    while (true) {
+        int len = read(conn_fd, buffer, sizeof(buffer));
+        if (len == -1) {
+            if (errno == EINTR) {
+                continue;
+            }
+            perror("read error");
+            break;
+        } else if (len == 0) {
+            printf("client ip: %s, port: %d closed.\n",
+                   inet_ntop(AF_INET, &addr.sin_addr.s_addr, client_ip, sizeof(client_ip)),
+                   ntohs(addr.sin_port));
+            break;
+        } else {
+            printf("client ip: %s, port: %d, message: %s\n",
+                   inet_ntop(AF_INET, &addr.sin_addr.s_addr, client_ip, sizeof(client_ip)),
+                   ntohs(addr.sin_port), buffer);
+            for (int i = 0; i < len; i++) {
+                buffer[i] = toupper(buffer[i]);
+            }
+            write(conn_fd, buffer, len);
+        }
+    }
+    
+    close(conn_fd);
 }
 
 int main()
 {
-    int lfd = 0;
-    int cfd = 0;
-
-    char buffer[BUFSIZ];
-    char client_ip[ADDRSTR_SIZE];
-
-    sockaddr_in server_addr, client_addr;
-    socklen_t client_addr_len = sizeof(client_addr);
+    sockaddr_in server_addr;
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(SERVER_DEFAULT_PORT);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    lfd = socket(AF_INET, SOCK_STREAM, 0);
+    int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+    int option = 1;
+    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(int));
 
-    if (lfd == -1)
-    {
-        sys_error("socket error");
-    }
-    bind(lfd, (sockaddr *)&server_addr, sizeof(server_addr));
-    listen(lfd, 128);
+    if (listen_fd == -1) pexit("socket error");
 
-    client_addr_len = sizeof(client_addr);
-    cfd = accept(lfd, (sockaddr *)&client_addr, &client_addr_len);
-    if (cfd == -1)
-    {
-        sys_error("accept error");
-    }
-
-    printf("client ip: %s, port: %d\n",
-           inet_ntop(AF_INET, &client_addr.sin_addr.s_addr, client_ip, sizeof(client_ip)),
-           ntohs(client_addr.sin_port));
+    bind(listen_fd, (sockaddr *)&server_addr, sizeof(server_addr));
+    listen(listen_fd, 128);
 
     while (true) {
-        int len = read(cfd, buffer, sizeof(buffer));
-        if (len == -1) {
-            if (errno == EINTR) {
-                continue;
-            }
-            sys_error("read error");
-        } else if (len == 0) {
-            printf("client closed\n");
-            break;
-        } else {
-            write(STDOUT_FILENO, buffer, len);
-            write(STDOUT_FILENO, "\n", 1);
-            for (int i = 0; i < len; i++) {
-                buffer[i] = toupper(buffer[i]);
-            }
-            write(cfd, buffer, len);
+        sockaddr_in client_addr;
+        socklen_t client_addr_len = sizeof(client_addr);
+        int client_fd = accept(listen_fd, (sockaddr *)&client_addr, &client_addr_len);
+        if (client_fd == -1) {
+            perror("accept error");
+            continue;
         }
+
+        std::thread t(process_client, client_addr, client_fd);
+        t.detach();
     }
 
-    close(lfd);
-    close(cfd);
+    close(listen_fd);
     return 0;
 }

@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 void sys_error(const char *msg)
 {
@@ -28,11 +29,15 @@ int main() {
         sys_error("connect error");
     }
 
-    write(cfd, "hello", 5);
-    sleep(1);
-    ret = read(cfd, buffer, sizeof(buffer));
-    write(STDOUT_FILENO, buffer, ret);
-    write(STDOUT_FILENO, "\n", 1);
+    int serial_id = 0;
+    while (true) {
+        int len = sprintf(buffer, "hello, server! serial id: %d", serial_id++);
+        write(cfd, buffer, len);
+        ret = read(cfd, buffer, sizeof(buffer));
+        write(STDOUT_FILENO, buffer, ret);
+        write(STDOUT_FILENO, "\n", 1);
+        sleep(1);
+    }
 
     close(cfd);
     return 0;

@@ -11,4 +11,12 @@
 
 #define ADDRSTR_SIZE (INET_ADDRSTRLEN + 1)
 
+#define pexit(msg) \
+    do { \
+        perror(msg); \
+        exit(1); \
+    } while (0)
+
+
+
 #endif // __NET_H__
