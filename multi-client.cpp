@@ -27,15 +27,19 @@ void create_client(const char *dest_ip, const int dest_port, const int client_id
         sys_error("socket error");
     }
 
+    printf("client %d created.\n", client_id);
     int ret = connect(cfd, (sockaddr *)&server_addr, sizeof(server_addr));
     if (ret != 0) {
         sys_error("connect error");
     }
 
+    printf("client %d connected.\n", client_id);
+
     int serial_id = 0;
     while (true) {
         int len = sprintf(buffer, "hello, server! client id: %d, serial id: %d", client_id, serial_id++);
         write(cfd, buffer, len);
+        printf("client %d sent: %s\n", client_id, buffer);
         ret = read(cfd, buffer, sizeof(buffer));
         if (ret == 0) {
             perror("server closed.\n");
